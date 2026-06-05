@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "website" TEXT NOT NULL DEFAULT '';
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "industry" TEXT NOT NULL DEFAULT 'Technology';

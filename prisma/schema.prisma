@@ -21,6 +21,8 @@ model User {
   password    String
   companyName String
   location    String
+  website     String   @default("")
+  industry    String   @default("Technology")
   role        Role     @default(Company) 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

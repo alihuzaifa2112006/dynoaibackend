@@ -126,8 +126,12 @@ const loginUser = async (req, res) => {
             token,
             user: {
                 id: user.id,
+                email: user.email,
                 username: user.username,
                 companyName: user.companyName,
+                location: user.location,
+                website: user.website,
+                industry: user.industry,
                 companyId: user.CompId,
                 cusUserId: user.CusUserId,
                 role: user.role
@@ -145,15 +149,22 @@ const loginUser = async (req, res) => {
 
 const getCompanyProfile = async (req, res) => {
     try {
+        const { cusUserId } = req.params;
+
+        if (!cusUserId) {
+            return res.status(400).json({ message: "cusUserId is required" });
+        }
 
         const userProfile = await prisma.user.findUnique({
-            where: { id: req.user.id },
+            where: { CusUserId: cusUserId },
             select: {
                 id: true,
                 email: true,
                 username: true,
                 companyName: true,
                 location: true,
+                website: true,
+                industry: true,
                 role: true,
                 CompId: true,
                 CusUserId: true,
@@ -163,6 +174,10 @@ const getCompanyProfile = async (req, res) => {
 
         if (!userProfile) {
             return res.status(404).json({ message: "User not found" });
+        }
+
+        if (req.user.role !== "Admin" && req.user.id !== userProfile.id) {
+            return res.status(403).json({ message: "Not authorized to view this profile" });
         }
 
         res.status(200).json({
@@ -175,4 +190,170 @@ const getCompanyProfile = async (req, res) => {
     }
 };
 
-module.exports = { registerCompany, loginUser, getCompanyProfile };
+const updateCompanyProfile = async (req, res) => {
+    try {
+        const { cusUserId } = req.params;
+        const { username, email, companyName, location, website, industry } = req.body;
+
+        if (!cusUserId) {
+            return res.status(400).json({ message: "cusUserId is required" });
+        }
+
+        const existing = await prisma.user.findUnique({
+            where: { CusUserId: cusUserId }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (req.user.role !== "Admin" && req.user.id !== existing.id) {
+            return res.status(403).json({ message: "Not authorized to update this profile" });
+        }
+
+        if (email && email !== existing.email) {
+            const emailTaken = await prisma.user.findUnique({ where: { email } });
+            if (emailTaken) {
+                return res.status(400).json({ message: "Email already in use" });
+            }
+        }
+
+        if (username && username !== existing.username) {
+            const usernameTaken = await prisma.user.findUnique({ where: { username } });
+            if (usernameTaken) {
+                return res.status(400).json({ message: "Username already in use" });
+            }
+        }
+
+        const updatedUser = await prisma.user.update({
+            where: { CusUserId: cusUserId },
+            data: {
+                ...(username !== undefined && username !== "" && { username }),
+                ...(email !== undefined && email !== "" && { email }),
+                ...(companyName !== undefined && companyName !== "" && { companyName }),
+                ...(location !== undefined && location !== "" && { location }),
+                ...(website !== undefined && { website }),
+                ...(industry !== undefined && industry !== "" && { industry }),
+            },
+            select: {
+                id: true,
+                email: true,
+                username: true,
+                companyName: true,
+                location: true,
+                website: true,
+                industry: true,
+                role: true,
+                CompId: true,
+                CusUserId: true,
+                createdAt: true
+            }
+        });
+
+        res.status(200).json({
+            message: "Profile updated successfully!",
+            user: updatedUser
+        });
+
+    } catch (error) {
+        res.status(500).json({ message: "Server Error", error: error.message });
+    }
+};
+
+const changePassword = async (req, res) => {
+    try {
+        const { cusUserId } = req.params;
+        const { currentPassword, newPassword } = req.body;
+
+        if (!cusUserId) {
+            return res.status(400).json({ message: "cusUserId is required" });
+        }
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ message: "Current and new password are required" });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({ message: "New password must be at least 6 characters" });
+        }
+
+        if (currentPassword === newPassword) {
+            return res.status(400).json({ message: "New password must be different from current password" });
+        }
+
+        const existing = await prisma.user.findUnique({
+            where: { CusUserId: cusUserId },
+            select: { id: true, password: true }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (req.user.role !== "Admin" && req.user.id !== existing.id) {
+            return res.status(403).json({ message: "Not authorized to change this password" });
+        }
+
+        const isMatch = await bcrypt.compare(currentPassword, existing.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: "Current password is incorrect" });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        await prisma.user.update({
+            where: { CusUserId: cusUserId },
+            data: { password: hashedPassword }
+        });
+
+        res.status(200).json({ message: "Password updated successfully" });
+
+    } catch (error) {
+        res.status(500).json({ message: "Server Error", error: error.message });
+    }
+};
+
+const deleteAccount = async (req, res) => {
+    try {
+        const { cusUserId } = req.params;
+        const { password } = req.body;
+
+        if (!cusUserId) {
+            return res.status(400).json({ message: "cusUserId is required" });
+        }
+
+        if (!password) {
+            return res.status(400).json({ message: "Password is required to delete your account" });
+        }
+
+        const existing = await prisma.user.findUnique({
+            where: { CusUserId: cusUserId },
+            select: { id: true, password: true }
+        });
+
+        if (!existing) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        if (req.user.role !== "Admin" && req.user.id !== existing.id) {
+            return res.status(403).json({ message: "Not authorized to delete this account" });
+        }
+
+        const isMatch = await bcrypt.compare(password, existing.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: "Password is incorrect" });
+        }
+
+        await prisma.user.delete({
+            where: { CusUserId: cusUserId }
+        });
+
+        res.status(200).json({ message: "Account deleted successfully" });
+
+    } catch (error) {
+        res.status(500).json({ message: "Server Error", error: error.message });
+    }
+};
+
+module.exports = { registerCompany, loginUser, getCompanyProfile, updateCompanyProfile, changePassword, deleteAccount };
