@@ -1,10 +1,12 @@
 
 datasource db {
   provider = "postgresql"
+  extensions = [pgvector(map: "vector")]
 }
 
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 
@@ -30,5 +32,29 @@ model User {
   CompId      String   @unique
   CusUserId   String   @unique
 
+
+
+  documentChunks DocumentChunk[]
+
   @@map("users")
+}
+
+
+
+model DocumentChunk {
+  id         String   @id @default(uuid())
+  content    String   // Text chunk jo read kiya gaya (PDF, CSV ya Website URL se)
+  sourceUrl  String?  // Website ka dynamic link ya upload ki gayi file ka naam
+  sourceType String   // "WEBSITE" ya "FILE"
+  
+
+  embedding  Unsupported("vector(768)")?
+
+  
+  compId     String
+  user       User     @relation(fields: [compId], references: [CompId], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+
+  @@map("document_chunks")
 }
