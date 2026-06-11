@@ -17,7 +17,15 @@ router.post('/WebsiteDataFetcherApiByHuzaifa', async (req, res) => {
             return res.status(403).json({ success: false, error: "compid aapke account se match nahi karti" });
         }
 
-        const response = await axios.post(process.env.PYTHON_API_URL, {
+        const pythonApiUrl = process.env.PYTHON_API_URL;
+        if (!pythonApiUrl) {
+            return res.status(500).json({
+                success: false,
+                error: "Server config missing: PYTHON_API_URL env variable set karo (Render dashboard / .env).",
+            });
+        }
+
+        const response = await axios.post(pythonApiUrl, {
             url,
             company_id: companyId,
             user_id: req.user.id || req.user.email,
@@ -41,7 +49,7 @@ router.post('/WebsiteDataFetcherApiByHuzaifa', async (req, res) => {
         }
         return res.status(503).json({
             success: false,
-            error: `Python backend unreachable. Port 8000 par uvicorn chalao. (${error.message})`
+            error: `Python backend unreachable. PYTHON_API_URL check karo. (${error.message || "connection failed"})`,
         });
     }
 });
