@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const userRouter = require('./Routes/userRoutes');
 const { protect, authorizeRoles } = require('./middleware/middlewar');
+const scraperRoute = require('./Routes/scraperRoute');
 
 
 
@@ -21,5 +22,6 @@ app.get('/api/firstApi', (req, res) => {
 
 app.use('/api/user', userRouter);
 
+app.use('/api/scraper', protect, scraperRoute);
 
 module.exports = app;
