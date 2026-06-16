@@ -2,7 +2,10 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const multer = require('multer');
+const FormData = require('form-data');
 
+const upload = multer({ storage: multer.memoryStorage() });
 const PYTHON_TIMEOUT_MS = 180000;
 const MAX_PYTHON_RETRIES = 4;
 
@@ -15,6 +18,40 @@ function getPythonBaseUrl(pythonApiUrl) {
     } catch {
         return null;
     }
+}
+
+function getPythonPdfUploadUrl() {
+    const base = getPythonBaseUrl(process.env.PYTHON_API_URL);
+    if (!base) return null;
+    return `${base}/api/scraper/UploadPdfByHuzaifa`;
+}
+
+function formatProxyError(error, fallback = 'Python API error') {
+    if (error.response) {
+        const data = error.response.data;
+        const status = error.response.status;
+
+        if ([502, 503, 504].includes(status)) {
+            return {
+                status,
+                body: {
+                    success: false,
+                    error: 'Python backend abhi wake up ho raha hai (Render free tier). 1-2 minute wait karke dubara try karo.',
+                },
+            };
+        }
+
+        const message = data?.detail || data?.error || data?.message || fallback;
+        return { status, body: { success: false, error: message } };
+    }
+
+    return {
+        status: 503,
+        body: {
+            success: false,
+            error: `Python backend unreachable. PYTHON_API_URL aur INTERNAL_SECRET_KEY Render par check karo. (${error.message || 'connection failed'})`,
+        },
+    };
 }
 
 async function wakePythonBackend(pythonApiUrl) {
@@ -95,25 +132,72 @@ router.post('/WebsiteDataFetcherApiByHuzaifa', async (req, res) => {
 
     } catch (error) {
         console.error("❌ Node Proxy Error:", error.message);
-        if (error.response) {
-            const data = error.response.data;
-            const status = error.response.status;
+        const { status, body } = formatProxyError(error);
+        return res.status(status).json(body);
+    }
+});
 
-            if ([502, 503, 504].includes(status)) {
-                return res.status(status).json({
-                    success: false,
-                    error: "Python backend abhi wake up ho raha hai (Render free tier). 1-2 minute wait karke dubara try karo.",
-                });
-            }
+router.post('/UploadPdfByHuzaifa', upload.single('file'), async (req, res) => {
+    try {
+        const { compid, userid } = req.body;
+        const file = req.file;
 
-            const message = data?.detail || data?.error || data?.message || "Python API error";
-            return res.status(status).json({ success: false, error: message });
+        if (!file || !compid || !userid) {
+            return res.status(400).json({
+                success: false,
+                error: 'file, compid aur userid required hain!',
+            });
         }
 
-        return res.status(503).json({
-            success: false,
-            error: `Python backend unreachable. PYTHON_API_URL aur INTERNAL_SECRET_KEY Render par check karo. (${error.message || "connection failed"})`,
+        if (req.user.role === 'Company' && req.user.companyId !== compid) {
+            return res.status(403).json({
+                success: false,
+                error: 'compid aapke account se match nahi karti',
+            });
+        }
+
+        const pythonPdfUrl = getPythonPdfUploadUrl();
+        const secretKey = process.env.INTERNAL_SECRET_KEY;
+
+        if (!pythonPdfUrl) {
+            return res.status(500).json({
+                success: false,
+                error: 'Server config missing: PYTHON_API_URL env variable set karo (Render dashboard / .env).',
+            });
+        }
+
+        if (!secretKey) {
+            return res.status(500).json({
+                success: false,
+                error: 'Server config missing: INTERNAL_SECRET_KEY env variable set karo.',
+            });
+        }
+
+        await wakePythonBackend(process.env.PYTHON_API_URL);
+
+        const form = new FormData();
+        form.append('file', file.buffer, {
+            filename: file.originalname,
+            contentType: file.mimetype || 'application/pdf',
         });
+        form.append('compid', compid);
+        form.append('userid', userid);
+
+        const response = await axios.post(pythonPdfUrl, form, {
+            headers: {
+                ...form.getHeaders(),
+                'x-internal-secret': secretKey,
+            },
+            timeout: PYTHON_TIMEOUT_MS,
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+        });
+
+        return res.status(200).json(response.data);
+    } catch (error) {
+        console.error('❌ Node PDF Proxy Error:', error.message);
+        const { status, body } = formatProxyError(error, 'PDF upload failed.');
+        return res.status(status).json(body);
     }
 });
 
