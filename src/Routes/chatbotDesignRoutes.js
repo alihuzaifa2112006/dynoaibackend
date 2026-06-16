@@ -11,6 +11,7 @@ const {
 router.get('/public/:companyId', getPublicChatbotDesign);
 
 router.get('/:companyId', protect, getChatbotDesign);
+router.post('/:companyId', protect, upsertChatbotDesign);
 router.put('/:companyId', protect, upsertChatbotDesign);
 router.delete('/:companyId', protect, deleteChatbotDesign);
 
