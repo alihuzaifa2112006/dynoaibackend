@@ -1,60 +1,92 @@
-
-datasource db {
-  provider = "postgresql"
-  extensions = [pgvector(map: "vector")]
-}
-
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   previewFeatures = ["postgresqlExtensions"]
 }
 
+datasource db {
+  provider   = "postgresql"
+  extensions = [vector]
+}
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  username       String          @unique
+  password       String
+  companyName    String
+  location       String
+  website        String          @default("")
+  industry       String          @default("Technology")
+  role           Role            @default(Company)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  CompId         String          @unique
+  CusUserId      String          @unique
+  documentChunks DocumentChunk[]
+
+  @@map("users")
+}
+
+model DocumentChunk {
+  id         String                 @id @default(uuid())
+  content    String
+  sourceUrl  String?
+  sourceType String
+  embedding  Unsupported("vector")?
+  compId     String
+  createdAt  DateTime               @default(now())
+  user       User                   @relation(fields: [compId], references: [CompId], onDelete: Cascade)
+
+  @@map("document_chunks")
+}
+
+model companies {
+  id         String    @id @db.VarChar(255)
+  name       String    @db.VarChar(255)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model site_embeddings {
+  id         Int                    @id @default(autoincrement())
+  company_id String                 @db.VarChar(255)
+  user_id    String                 @db.VarChar(255)
+  url        String
+  content    String
+  embedding  Unsupported("vector")?
+  created_at DateTime?              @default(now()) @db.Timestamp(6)
+
+  @@index([embedding], map: "site_embeddings_hnsw_idx")
+}
 
 enum Role {
   Admin
   Company
 }
 
-
-model User {
-  id          String   @id @default(uuid())
-  email       String   @unique
-  username    String   @unique
-  password    String
-  companyName String
-  location    String
-  website     String   @default("")
-  industry    String   @default("Technology")
-  role        Role     @default(Company) 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  CompId      String   @unique
-  CusUserId   String   @unique
-
-
-
-  documentChunks DocumentChunk[]
-
-  @@map("users")
-}
-
-
-
-model DocumentChunk {
-  id         String   @id @default(uuid())
-  content    String   // Text chunk jo read kiya gaya (PDF, CSV ya Website URL se)
-  sourceUrl  String?  // Website ka dynamic link ya upload ki gayi file ka naam
-  sourceType String   // "WEBSITE" ya "FILE"
-  
-
-  embedding  Unsupported("vector(768)")?
-
-  
-  compId     String
-  user       User     @relation(fields: [compId], references: [CompId], onDelete: Cascade)
-
-  createdAt  DateTime @default(now())
-
-  @@map("document_chunks")
+model ChatbotDesign {
+  id              String   @id @default(uuid())
+  companyId       String   @unique
+  botName         String   @default("DynoQuery Assistant")
+  welcomeMessage  String   @default("Hello! How can I help you today?")
+  avatarDataUrl   String?  @db.Text
+  position        String   @default("bottom-right")
+  bubbleRadius    Int      @default(14)
+  fontHeader      String   @default("inter")
+  fontIncoming    String   @default("inter")
+  fontOutgoing    String   @default("inter")
+  fontInput       String   @default("inter")
+  headerBg        String   @default("#171717")
+  headerText      String   @default("#ffffff")
+  panelBg         String   @default("#ffffff")
+  incomingBg      String   @default("#f1f5f9")
+  incomingText    String   @default("#334155")
+  outgoingBg      String   @default("#171717")
+  outgoingText    String   @default("#ffffff")
+  inputAreaBg     String   @default("#f8fafc")
+  inputBg         String   @default("#ffffff")
+  inputText       String   @default("#0f172a")
+  sendButtonBg    String   @default("#171717")
+  sendButtonText  String   @default("#ffffff")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
