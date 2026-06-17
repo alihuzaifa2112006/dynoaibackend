@@ -201,4 +201,85 @@ router.post('/UploadPdfByHuzaifa', upload.single('file'), async (req, res) => {
     }
 });
 
+// GET all unique crawled websites and uploaded PDFs for a company
+router.get('/sources/:companyId', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+
+        if (!companyId) {
+            return res.status(400).json({ success: false, error: "companyId is required" });
+        }
+
+        // Check company authorization
+        if (req.user.role === 'Company' && req.user.companyId !== companyId) {
+            return res.status(403).json({ success: false, error: "Not authorized to access this company's sources" });
+        }
+
+        const prisma = require('../Config/db');
+
+        // Group by url to find all unique sources in site_embeddings
+        const groups = await prisma.site_embeddings.groupBy({
+            by: ['url'],
+            where: {
+                company_id: companyId
+            },
+            _min: {
+                created_at: true
+            },
+            _count: {
+                id: true
+            }
+        });
+
+        const sources = groups.map(g => {
+            const isPdf = g.url.startsWith('pdf://');
+            return {
+                url: g.url,
+                isPdf,
+                name: isPdf ? g.url.replace('pdf://', '') : g.url,
+                createdAt: g._min.created_at || new Date(),
+                chunksCount: g._count.id,
+                embeddingsSaved: true
+            };
+        });
+
+        return res.status(200).json({ success: true, sources });
+    } catch (error) {
+        console.error("❌ Get Sources Error:", error.message);
+        return res.status(500).json({ success: false, error: "Server Error", details: error.message });
+    }
+});
+
+// DELETE a source (website or PDF) for a company
+router.delete('/source/:companyId', async (req, res) => {
+    try {
+        const { companyId } = req.params;
+        const targetUrl = req.query.url;
+
+        if (!companyId || !targetUrl) {
+            return res.status(400).json({ success: false, error: "companyId and url query param are required" });
+        }
+
+        // Check company authorization
+        if (req.user.role === 'Company' && req.user.companyId !== companyId) {
+            return res.status(403).json({ success: false, error: "Not authorized to modify this company's sources" });
+        }
+
+        const prisma = require('../Config/db');
+
+        // Delete all site_embeddings for this company and url
+        const result = await prisma.site_embeddings.deleteMany({
+            where: {
+                company_id: companyId,
+                url: targetUrl
+            }
+        });
+
+        return res.status(200).json({ success: true, message: `Successfully deleted source: ${targetUrl}` });
+    } catch (error) {
+        console.error("❌ Delete Source Error:", error.message);
+        return res.status(500).json({ success: false, error: "Server Error", details: error.message });
+    }
+});
+
 module.exports = router;
