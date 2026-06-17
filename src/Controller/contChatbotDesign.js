@@ -1,4 +1,5 @@
 const prisma = require('../Config/db');
+const axios = require('axios');
 
 const designSelect = {
     id: true,
@@ -191,9 +192,45 @@ const deleteChatbotDesign = async (req, res) => {
     }
 };
 
+const askChatbotQuestion = async (req, res) => {
+    try {
+        const { companyId, message } = req.body;
+        if (!companyId || !message) {
+            return res.status(400).json({ success: false, message: "companyId and message are required" });
+        }
+
+        // Verify that the company exists in the database
+        const companyExists = await prisma.user.findUnique({
+            where: { CompId: companyId },
+            select: { CompId: true }
+        });
+
+        if (!companyExists) {
+            return res.status(404).json({ success: false, message: `Company ID '${companyId}' is not registered.` });
+        }
+
+        const pythonBaseUrl = process.env.PYTHON_API_URL 
+            ? new URL(process.env.PYTHON_API_URL).origin 
+            : "http://localhost:8000";
+        const pythonUrl = `${pythonBaseUrl}/api/question`;
+
+        const response = await axios.post(pythonUrl, {
+            companyId,
+            message
+        });
+
+        return res.status(200).json(response.data);
+    } catch (error) {
+        console.error("❌ Widget Question Proxy Error:", error.message);
+        const detail = error.response?.data?.detail || error.response?.data?.message || error.message;
+        return res.status(error.response?.status || 500).json({ success: false, message: "Error from Chatbot Engine", detail });
+    }
+};
+
 module.exports = {
     getChatbotDesign,
     getPublicChatbotDesign,
     upsertChatbotDesign,
     deleteChatbotDesign,
+    askChatbotQuestion,
 };

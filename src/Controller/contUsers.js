@@ -86,9 +86,12 @@ const loginUser = async (req, res) => {
         }
 
         // --- STEP A: SUPER ADMIN BYPASS CHECK ---
-        if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
+        const adminUser = (process.env.Admin_Username || "alihuzaifa").trim();
+        const adminPass = (process.env.Admin_Password || "Alihuzaifa313").trim();
+
+        if ((email === adminUser || email === "admin@dynoquery.com") && password === adminPass) {
             const adminToken = jwt.sign(
-                { role: "Admin", email: email },
+                { role: "Admin", email: "admin@dynoquery.com", username: adminUser },
                 process.env.JWT_SECRET || "fallback_secret_key",
                 { expiresIn: '1d' }
             );
@@ -96,6 +99,13 @@ const loginUser = async (req, res) => {
             return res.status(200).json({
                 message: "Welcome Back, Super Admin!",
                 token: adminToken,
+                user: {
+                    id: "admin-id",
+                    email: "admin@dynoquery.com",
+                    username: adminUser,
+                    companyName: "Admin Console",
+                    role: "Admin"
+                },
                 role: "Admin"
             });
         }
@@ -356,4 +366,80 @@ const deleteAccount = async (req, res) => {
     }
 };
 
-module.exports = { registerCompany, loginUser, getCompanyProfile, updateCompanyProfile, changePassword, deleteAccount };
+const getAdminStats = async (req, res) => {
+    try {
+        if (req.user.role !== "Admin") {
+            return res.status(403).json({ message: "Forbidden: Admin role required" });
+        }
+
+        // Count total users (excluding Admin)
+        const totalUsers = await prisma.user.count({
+            where: {
+                role: {
+                    not: "Admin"
+                }
+            }
+        });
+
+        // Count total unique website URLs (not starting with pdf://)
+        const urlsGroup = await prisma.site_embeddings.groupBy({
+            by: ['url'],
+            where: {
+                NOT: {
+                    url: {
+                        startsWith: 'pdf://'
+                    }
+                }
+            }
+        });
+        const totalUrls = urlsGroup.length;
+
+        // Count total unique PDF source files (starting with pdf://)
+        const pdfsGroup = await prisma.site_embeddings.groupBy({
+            by: ['url'],
+            where: {
+                url: {
+                    startsWith: 'pdf://'
+                }
+            }
+        });
+        const totalPdfs = pdfsGroup.length;
+
+        // Fetch all registered users/companies
+        const usersList = await prisma.user.findMany({
+            where: {
+                role: {
+                    not: "Admin"
+                }
+            },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                companyName: true,
+                location: true,
+                CompId: true,
+                CusUserId: true,
+                createdAt: true
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+
+        res.status(200).json({
+            success: true,
+            stats: {
+                totalUsers,
+                totalUrls,
+                totalPdfs
+            },
+            users: usersList
+        });
+    } catch (error) {
+        console.error("❌ Admin Stats Error:", error.message);
+        res.status(500).json({ message: "Server Error", error: error.message });
+    }
+};
+
+module.exports = { registerCompany, loginUser, getCompanyProfile, updateCompanyProfile, changePassword, deleteAccount, getAdminStats };

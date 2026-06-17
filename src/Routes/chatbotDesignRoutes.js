@@ -6,9 +6,11 @@ const {
     getPublicChatbotDesign,
     upsertChatbotDesign,
     deleteChatbotDesign,
+    askChatbotQuestion,
 } = require('../Controller/contChatbotDesign');
 
 router.get('/public/:companyId', getPublicChatbotDesign);
+router.post('/public/question', askChatbotQuestion);
 
 router.get('/:companyId', protect, getChatbotDesign);
 router.post('/:companyId', protect, upsertChatbotDesign);
