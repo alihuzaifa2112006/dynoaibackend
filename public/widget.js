@@ -15,7 +15,7 @@
         return;
     }
 
-    const companyId = scriptTag.getAttribute('data-company-id');
+    const companyId = scriptTag.getAttribute('data-company-id')?.trim();
     if (!companyId) {
         console.error("DynoQuery Widget: 'data-company-id' attribute is required to initialize the chatbot.");
         return;

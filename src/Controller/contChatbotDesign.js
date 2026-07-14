@@ -112,7 +112,26 @@ const getPublicChatbotDesign = async (req, res) => {
         });
 
         if (!design) {
-            return res.status(404).json({ message: 'Chatbot design not found for this company' });
+            return res.status(200).json({ 
+                design: {
+                    botName: "Assistant",
+                    welcomeMessage: "Hello! How can I help you today?",
+                    position: "bottom-right",
+                    bubbleRadius: 14,
+                    headerBg: "#171717",
+                    headerText: "#ffffff",
+                    panelBg: "#ffffff",
+                    incomingBg: "#f1f5f9",
+                    incomingText: "#334155",
+                    outgoingBg: "#171717",
+                    outgoingText: "#ffffff",
+                    inputAreaBg: "#f8fafc",
+                    inputBg: "#ffffff",
+                    inputText: "#0f172a",
+                    sendButtonBg: "#171717",
+                    sendButtonText: "#ffffff"
+                } 
+            });
         }
 
         res.status(200).json({ design });
